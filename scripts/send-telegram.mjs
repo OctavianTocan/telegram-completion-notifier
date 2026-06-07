@@ -33,16 +33,20 @@ export function resolveTelegramConfig(env = process.env) {
   };
 }
 
-export async function sendTelegramMessage(text, env = process.env) {
+export async function sendTelegramMessage(text, env = process.env, options = {}) {
   const { botToken, chatId } = resolveTelegramConfig(env);
+  const payload = {
+    chat_id: chatId,
+    text,
+    disable_notification: false,
+  };
+  if (options.parseMode) {
+    payload.parse_mode = options.parseMode;
+  }
   const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
-      disable_notification: false,
-    }),
+    body: JSON.stringify(payload),
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok || body.ok !== true) {

@@ -4,7 +4,16 @@
 
 ## What It Does
 
-This local Codex plugin sends a Telegram notification when a Codex turn finishes. The hook reads the final assistant response from the hook transcript, fetches the Telegram bot token and chat ID from Bitwarden Secrets Manager with `bws`, and sends a concise completion message.
+This local Codex plugin sends a Telegram notification when a Codex turn finishes. The Stop hook reads Codex's rollout transcript, fetches the Telegram bot token and chat ID from Bitwarden Secrets Manager with `bws`, and sends a rich completion summary.
+
+The summary includes:
+
+- session title or derived request name
+- session ID, workspace, model, and duration when available
+- the latest user request
+- a short summary of the final assistant response
+- files touched by patch events
+- tool-call counts
 
 The plugin does not store Telegram secrets locally. It expects `BWS_ACCESS_TOKEN` to be available in the shell environment and keeps only Bitwarden secret IDs in source.
 
@@ -43,6 +52,8 @@ export TELEGRAM_COMPLETION_CHAT_ID_SECRET_ID="..."
 
 ## Manual Test
 
+Send a plain manual message:
+
 ```bash
 node scripts/send-telegram.mjs "Codex Telegram notification test"
 ```
@@ -53,10 +64,17 @@ Expected output:
 {"ok":true,"message_id":123,"date":1780814666}
 ```
 
+Run the Stop hook against a Codex transcript by piping hook JSON:
+
+```bash
+printf '{"session_id":"test","session_name":"Manual hook smoke","transcript_path":"/path/to/transcript.jsonl"}' \
+  | node scripts/notify-final.mjs
+```
+
 ## Notes
 
 - The Stop hook de-dupes repeated sends per session and final message hash.
-- Token-shaped strings in final assistant text are redacted before sending.
+- Token-shaped strings in request and response text are redacted before sending.
 - Runtime audit logs live under `/tmp/telegram-completion-notifier/audit.log` and contain only status, timestamps, session IDs, and Telegram message IDs.
 
 ## Repository
