@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 
 const DEFAULT_BOT_TOKEN_SECRET_ID = "aadcf695-6049-47ac-9d9b-b462006bab90";
 const DEFAULT_CHAT_ID_SECRET_ID = "3ebc58f1-644f-4b1c-af95-b462006be9fe";
+const INLINE_KEYBOARD_DISABLED_VALUES = new Set(["0", "false", "off", "no"]);
 
 function readSecretValue(secretId) {
   const raw = execFileSync("bws", ["secret", "get", secretId, "--output", "json"], {
@@ -33,6 +35,53 @@ export function resolveTelegramConfig(env = process.env) {
   };
 }
 
+function isInlineKeyboardEnabled(env) {
+  const value = env.TELEGRAM_COMPLETION_INLINE_KEYBOARD;
+  return !INLINE_KEYBOARD_DISABLED_VALUES.has(String(value || "").trim().toLowerCase());
+}
+
+function safeCallbackToken(seed) {
+  return createHash("sha256").update(seed || "manual").digest("hex").slice(0, 20);
+}
+
+function continueCallbackData(options) {
+  if (options.continueCallbackData) return options.continueCallbackData.slice(0, 64);
+
+  const sessionId = String(options.sessionId || "").trim();
+  if (/^[A-Za-z0-9_.:-]{1,48}$/.test(sessionId)) {
+    return `tcn:continue:${sessionId}`;
+  }
+
+  const callbackSeed = options.callbackSeed || options.messageId || sessionId || "manual";
+  return `tcn:continue:${safeCallbackToken(callbackSeed)}`;
+}
+
+function validTelegramButtonUrl(url) {
+  return /^(https?:\/\/|tg:\/\/)/i.test(url || "");
+}
+
+export function buildDefaultReplyMarkup(options = {}, env = process.env) {
+  if (!isInlineKeyboardEnabled(env)) return null;
+
+  const continueData = continueCallbackData(options);
+  const firstRow = [
+    {
+      text: env.TELEGRAM_COMPLETION_CONTINUE_LABEL || "Continue",
+      callback_data: continueData.slice(0, 64),
+    },
+  ];
+
+  const openUrl = options.openUrl || env.TELEGRAM_COMPLETION_OPEN_URL;
+  if (validTelegramButtonUrl(openUrl)) {
+    firstRow.push({
+      text: env.TELEGRAM_COMPLETION_OPEN_LABEL || "Open Codex",
+      url: openUrl,
+    });
+  }
+
+  return { inline_keyboard: [firstRow] };
+}
+
 export async function sendTelegramMessage(text, env = process.env, options = {}) {
   const { botToken, chatId } = resolveTelegramConfig(env);
   const payload = {
@@ -42,6 +91,10 @@ export async function sendTelegramMessage(text, env = process.env, options = {})
   };
   if (options.parseMode) {
     payload.parse_mode = options.parseMode;
+  }
+  const replyMarkup = options.replyMarkup === undefined ? buildDefaultReplyMarkup(options, env) : options.replyMarkup;
+  if (replyMarkup) {
+    payload.reply_markup = replyMarkup;
   }
   const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: "POST",

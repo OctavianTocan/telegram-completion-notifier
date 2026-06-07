@@ -420,7 +420,11 @@ async function main() {
   }
 
   const body = formatNotification(input, collected);
-  const result = await sendTelegramMessage(body, process.env, { parseMode: "HTML" });
+  const result = await sendTelegramMessage(body, process.env, {
+    callbackSeed: sessionId,
+    parseMode: "HTML",
+    sessionId,
+  });
   markSent(sessionId, textHash, result.messageId);
   logAudit({ event: "sent", sessionId, messageId: result.messageId, rich: true });
   console.error(`[telegram-completion-notifier] sent rich Telegram summary message_id=${result.messageId}`);

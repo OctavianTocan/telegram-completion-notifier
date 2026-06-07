@@ -15,6 +15,7 @@ The summary includes:
 - a short summary of the final assistant response
 - files touched by patch events
 - tool-call counts
+- an inline keyboard with a `Continue` callback button on every message
 
 The plugin does not store Telegram secrets locally. It expects `BWS_ACCESS_TOKEN` to be available in the shell environment and keeps only Bitwarden secret IDs in source.
 
@@ -23,8 +24,11 @@ The plugin does not store Telegram secrets locally. It expects `BWS_ACCESS_TOKEN
 ```text
 telegram-completion-notifier/
 ├── .codex-plugin/plugin.json
+├── claude/settings.example.json
 ├── hooks/hooks.json
+├── scripts/notify-claude-final.mjs
 ├── scripts/notify-final.mjs
+├── scripts/poll-telegram-actions.mjs
 ├── scripts/send-telegram.mjs
 └── skills/telegram-notify/SKILL.md
 ```
@@ -51,6 +55,19 @@ export TELEGRAM_COMPLETION_BOT_TOKEN_SECRET_ID="..."
 export TELEGRAM_COMPLETION_CHAT_ID_SECRET_ID="..."
 ```
 
+Optional inline-keyboard settings:
+
+```bash
+# Disable buttons entirely.
+export TELEGRAM_COMPLETION_INLINE_KEYBOARD=0
+
+# Add a second URL button next to Continue.
+# Telegram accepts HTTP(S) and tg:// button URLs.
+export TELEGRAM_COMPLETION_OPEN_URL="https://example.com/open-codex"
+export TELEGRAM_COMPLETION_OPEN_LABEL="Open Codex"
+export TELEGRAM_COMPLETION_CONTINUE_LABEL="Continue"
+```
+
 ## Manual Test
 
 Send a plain manual message:
@@ -72,12 +89,62 @@ printf '{"session_id":"test","session_name":"Manual hook smoke","transcript_path
   | node scripts/notify-final.mjs
 ```
 
+Poll and acknowledge inline keyboard callbacks:
+
+```bash
+node scripts/poll-telegram-actions.mjs
+```
+
+The poller records `Continue` clicks in:
+
+```text
+<os-temp-dir>/telegram-completion-notifier/actions.jsonl
+```
+
+The poller prints the actual `actions_log` path after each run.
+
 ## Notes
 
 - The Stop hook de-dupes repeated sends per session and final message hash.
 - Telegram messages use HTML formatting for bold labels and code-styled IDs, paths, and model names.
+- The `Continue` button is a Telegram callback button. It needs `scripts/poll-telegram-actions.mjs`, a cron, a daemon, or a webhook to consume callbacks. Without a receiver, Telegram stores the callback update but no Codex action runs.
+- Pressing `Continue` currently records and acknowledges the request. Actually resuming a Codex session should be wired through a deliberately trusted bridge such as Codex remote-control, an app-server endpoint, or a controlled `codex resume` worker.
 - Token-shaped strings in request and response text are redacted before sending.
-- Runtime audit logs live under `/tmp/telegram-completion-notifier/audit.log` and contain only status, timestamps, session IDs, and Telegram message IDs.
+- Runtime audit logs live under `<os-temp-dir>/telegram-completion-notifier/audit.log` and contain only status, timestamps, session IDs, and Telegram message IDs.
+
+## Claude Code Compatibility
+
+Claude Code has command hooks that also receive JSON on stdin. A Claude Code
+Stop hook can reuse `scripts/send-telegram.mjs` and the same Bitwarden-backed
+Telegram credentials, but it needs a Claude-specific transcript adapter because
+Claude Code hook input and transcript files differ from Codex rollout JSONL.
+
+The intended adapter shape is:
+
+```text
+Claude Code Stop hook JSON -> Claude summary formatter -> send-telegram.mjs
+```
+
+Claude Code's Stop hook provides fields such as `session_id`, `transcript_path`,
+`cwd`, `hook_event_name`, `stop_hook_active`, and `last_assistant_message`.
+That is enough to build the same rich Telegram message without parsing Codex's
+rollout event format.
+
+This repo includes that adapter:
+
+```bash
+node /root/plugins/telegram-completion-notifier/scripts/notify-claude-final.mjs
+```
+
+Example Claude Code settings are in:
+
+```text
+claude/settings.example.json
+```
+
+Use that as the shape for a project or user-level `.claude/settings.json` Stop
+hook. It sends `Claude Code completion summary` messages through the same
+Bitwarden-backed Telegram transport and the same inline keyboard behavior.
 
 ## Repository
 
