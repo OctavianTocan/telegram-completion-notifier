@@ -16,6 +16,8 @@ The summary includes:
 - files touched by patch events
 - tool-call counts
 - an inline keyboard with a `Continue` callback button on every message
+- a second, separate message containing the last AI response, labeled with
+  `🤖 Codex last AI message` or `🟣 Claude Code last AI message`
 
 The plugin does not store Telegram secrets locally. It expects `BWS_ACCESS_TOKEN` to be available in the shell environment and keeps only Bitwarden secret IDs in source.
 
@@ -107,6 +109,7 @@ The poller prints the actual `actions_log` path after each run.
 
 - The Stop hook de-dupes repeated sends per session and final message hash.
 - Telegram messages use HTML formatting for bold labels and code-styled IDs, paths, and model names.
+- Every completion sends a summary message followed by a separate last-AI-message copy.
 - The `Continue` button is a Telegram callback button. It needs `scripts/poll-telegram-actions.mjs`, a cron, a daemon, or a webhook to consume callbacks. Without a receiver, Telegram stores the callback update but no Codex action runs.
 - Pressing `Continue` currently records and acknowledges the request. Actually resuming a Codex session should be wired through a deliberately trusted bridge such as Codex remote-control, an app-server endpoint, or a controlled `codex resume` worker.
 - Token-shaped strings in request and response text are redacted before sending.
@@ -144,7 +147,8 @@ claude/settings.example.json
 
 Use that as the shape for a project or user-level `.claude/settings.json` Stop
 hook. It sends `Claude Code completion summary` messages through the same
-Bitwarden-backed Telegram transport and the same inline keyboard behavior.
+Bitwarden-backed Telegram transport and the same inline keyboard behavior,
+followed by a separate `🟣 Claude Code last AI message` copy.
 
 ## Repository
 

@@ -372,6 +372,22 @@ function formatNotification(input, collected) {
   return truncateForTelegram(compactLines(lines).join("\n"));
 }
 
+function formatLastAssistantMessage(finalText) {
+  const headerLines = [
+    "🤖 <b>Codex last AI message</b>",
+    "<i>Separate copy of the final assistant response.</i>",
+    "",
+  ];
+  const header = compactLines(headerLines).join("\n");
+  const maxBodyLength = Math.max(200, MAX_TELEGRAM_TEXT - header.length - 40);
+  const redacted = redactSecretLikeText(finalText || "").trim();
+  const body =
+    redacted.length <= maxBodyLength
+      ? redacted
+      : `${redacted.slice(0, maxBodyLength).trimEnd()}\n\n[truncated for Telegram]`;
+  return `${header}\n\n${htmlEscape(body)}`;
+}
+
 function truncateForTelegram(text) {
   if (text.length <= MAX_TELEGRAM_TEXT) return text;
   return `${text.slice(0, MAX_TELEGRAM_TEXT - 80).trimEnd()}\n\n[truncated for Telegram]`;
@@ -391,11 +407,11 @@ function alreadySent(sessionId, textHash) {
   }
 }
 
-function markSent(sessionId, textHash, messageId) {
+function markSent(sessionId, textHash, messageIds) {
   mkdirSync(STATE_DIR, { recursive: true });
   writeFileSync(
     statePathForSession(sessionId),
-    JSON.stringify({ lastTextHash: textHash, messageId, ts: new Date().toISOString() }, null, 2),
+    JSON.stringify({ lastTextHash: textHash, messageIds, ts: new Date().toISOString() }, null, 2),
     { mode: 0o600 },
   );
 }
@@ -425,9 +441,20 @@ async function main() {
     parseMode: "HTML",
     sessionId,
   });
-  markSent(sessionId, textHash, result.messageId);
-  logAudit({ event: "sent", sessionId, messageId: result.messageId, rich: true });
-  console.error(`[telegram-completion-notifier] sent rich Telegram summary message_id=${result.messageId}`);
+  const lastMessage = await sendTelegramMessage(formatLastAssistantMessage(finalText), process.env, {
+    callbackSeed: `${sessionId}:last`,
+    parseMode: "HTML",
+    sessionId,
+  });
+  const messageIds = {
+    summary: result.messageId,
+    lastAssistantMessage: lastMessage.messageId,
+  };
+  markSent(sessionId, textHash, messageIds);
+  logAudit({ event: "sent", sessionId, messageIds, rich: true });
+  console.error(
+    `[telegram-completion-notifier] sent rich Telegram summary message_id=${result.messageId} last_message_id=${lastMessage.messageId}`,
+  );
 }
 
 main().catch((error) => {
