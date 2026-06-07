@@ -21,6 +21,8 @@ The summary includes:
 
 The plugin does not store Telegram secrets locally. It expects `BWS_ACCESS_TOKEN` to be available in the shell environment and keeps only Bitwarden secret IDs in source.
 
+The Codex Stop hook is intentionally awaited rather than async: Codex currently skips async hook handlers, and this notifier must finish its Bitwarden lookup and Telegram sends before the turn process exits.
+
 ## Structure
 
 ```text
@@ -108,6 +110,7 @@ The poller prints the actual `actions_log` path after each run.
 ## Notes
 
 - The Stop hook de-dupes repeated sends per session and final message hash.
+- The Codex Stop hook uses Codex's plugin-provided `PLUGIN_ROOT` environment variable to locate `scripts/notify-final.mjs`.
 - Telegram messages use HTML formatting for bold labels and code-styled IDs, paths, and model names.
 - Every completion sends a summary message followed by a separate last-AI-message copy.
 - The `Continue` button is a Telegram callback button. It needs `scripts/poll-telegram-actions.mjs`, a cron, a daemon, or a webhook to consume callbacks. Without a receiver, Telegram stores the callback update but no Codex action runs.

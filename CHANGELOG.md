@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Make the Codex Stop hook awaited, use Codex's supported `PLUGIN_ROOT` hook environment, and raise the timeout to 45 seconds so automatic notifications actually run.
 - Send rich completion summaries with session metadata, request context, final-response summary, touched files, and tool counts.
 - Format Telegram messages with HTML and include source/agent identity for shared notification chats.
 - Add a default `Continue` inline keyboard button plus a callback poller that acknowledges and records continue requests.

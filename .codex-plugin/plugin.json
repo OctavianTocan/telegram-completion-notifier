@@ -1,6 +1,6 @@
 {
   "name": "telegram-completion-notifier",
-  "version": "0.1.0+codex.20260607074517",
+  "version": "0.1.0+codex.20260607110846",
   "description": "Send rich Codex completion summaries to Telegram using Bitwarden Secrets Manager.",
   "author": {
     "name": "Octavian Tocan"

@@ -6,7 +6,7 @@
           {
             "type": "command",
             "command": "node /root/plugins/telegram-completion-notifier/scripts/notify-claude-final.mjs",
-            "timeout": 20
+            "timeout": 45
           }
         ]
       }
