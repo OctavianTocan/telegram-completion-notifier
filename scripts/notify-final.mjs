@@ -2,7 +2,7 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { tmpdir } from "node:os";
+import { hostname, tmpdir } from "node:os";
 import { sendTelegramMessage } from "./send-telegram.mjs";
 
 const MAX_TELEGRAM_TEXT = 3900;
@@ -107,6 +107,7 @@ function collectTranscript(entries) {
   const result = {
     sessionMeta: null,
     latestTurnContext: null,
+    latestPrimaryTurnContext: null,
     latestUserText: "",
     latestAssistantText: "",
     latestFinalAssistantText: "",
@@ -124,6 +125,9 @@ function collectTranscript(entries) {
     }
     if (entry.type === "turn_context") {
       result.latestTurnContext = payload;
+      if (isPrimaryTurnContext(payload)) {
+        result.latestPrimaryTurnContext = payload;
+      }
     }
     if (payload?.type === "task_started") {
       result.startedAt = payload.started_at || entry.timestamp || result.startedAt;
@@ -163,6 +167,12 @@ function collectTranscript(entries) {
   return result;
 }
 
+function isPrimaryTurnContext(turnContext) {
+  const model = formatModel(turnContext?.model);
+  if (!model) return false;
+  return !/(auto[-_ ]?review|guardian|subagent)/i.test(model);
+}
+
 function redactSecretLikeText(text) {
   return text
     .replace(/\b\d{6,}:[A-Za-z0-9_-]{20,}\b/g, "[redacted-telegram-token]")
@@ -178,6 +188,36 @@ function shortText(text, maxLength) {
   const normalized = normalizeWhitespace(redactSecretLikeText(text || ""));
   if (normalized.length <= maxLength) return normalized;
   return `${normalized.slice(0, maxLength - 1).trimEnd()}...`;
+}
+
+function htmlEscape(text) {
+  return String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function htmlLine(label, value, { code = false } = {}) {
+  if (!value) return "";
+  const rendered = code ? `<code>${htmlEscape(value)}</code>` : htmlEscape(value);
+  return `<b>${htmlEscape(label)}</b>: ${rendered}`;
+}
+
+function compactLines(lines) {
+  const compacted = [];
+  let previousBlank = false;
+  for (const line of lines) {
+    if (line === null || line === undefined) continue;
+    if (line === "") {
+      if (!previousBlank && compacted.length > 0) compacted.push("");
+      previousBlank = true;
+      continue;
+    }
+    compacted.push(line);
+    previousBlank = false;
+  }
+  while (compacted[compacted.length - 1] === "") compacted.pop();
+  return compacted;
 }
 
 function firstMeaningfulLine(text) {
@@ -232,6 +272,18 @@ function formatModel(model) {
   return "";
 }
 
+function sourceName(input, collected) {
+  const explicit = input.source_name || process.env.TELEGRAM_COMPLETION_SOURCE_NAME;
+  if (typeof explicit === "string" && explicit.trim()) return shortText(explicit, 80);
+
+  const originator = collected.sessionMeta?.originator;
+  if (typeof originator === "string" && originator.trim()) {
+    return `Codex (${originator})`;
+  }
+
+  return "Codex";
+}
+
 function toolSummary(toolCalls) {
   const counts = new Map();
   for (const call of toolCalls) {
@@ -243,7 +295,7 @@ function toolSummary(toolCalls) {
     .map(([name, count]) => `${name} x${count}`);
 }
 
-function deriveSessionName(input, collected) {
+function explicitSessionName(input, collected) {
   const explicit =
     input.session_name ||
     input.conversation_title ||
@@ -251,7 +303,10 @@ function deriveSessionName(input, collected) {
     collected.sessionMeta?.title ||
     collected.latestTurnContext?.title;
   if (typeof explicit === "string" && explicit.trim()) return shortText(explicit, 80);
+  return "";
+}
 
+function deriveTaskName(input, collected) {
   const fromPrompt = firstMeaningfulLine(collected.latestUserText);
   if (fromPrompt) return shortText(fromPrompt, 80);
 
@@ -269,46 +324,52 @@ function formatNotification(input, collected) {
       collected.latestTurnContext?.turn_id ||
       "unknown",
   );
-  const cwd = collected.latestTurnContext?.cwd || collected.sessionMeta?.cwd || input.cwd || "";
-  const model = formatModel(collected.latestTurnContext?.model || collected.sessionMeta?.model);
+  const primaryContext = collected.latestPrimaryTurnContext || collected.latestTurnContext || {};
+  const cwd = primaryContext.cwd || collected.sessionMeta?.cwd || input.cwd || "";
+  const model = formatModel(input.model || primaryContext.model || collected.sessionMeta?.model);
   const duration = durationFromTranscript(collected);
-  const title = deriveSessionName(input, collected);
+  const sessionName = explicitSessionName(input, collected);
+  const taskName = deriveTaskName(input, collected);
+  const from = `${sourceName(input, collected)} on ${hostname()}`;
   const summaryLines = summarizeFinalText(collected.latestFinalAssistantText);
   const tools = toolSummary(collected.toolCalls);
   const changedFiles = [...collected.changedFiles].slice(0, 6);
 
   const lines = [
-    "Codex completion summary",
+    "<b>Codex completion summary</b>",
     "",
-    `Session: ${title}`,
-    `ID: ${sessionId.slice(0, 12)}${sessionId.length > 12 ? "..." : ""}`,
+    htmlLine("From", from),
+    htmlLine("Agent", "Codex"),
+    sessionName ? htmlLine("Session", sessionName) : "",
+    taskName ? htmlLine(sessionName ? "Task" : "Task", taskName) : "",
+    htmlLine("ID", `${sessionId.slice(0, 12)}${sessionId.length > 12 ? "..." : ""}`, { code: true }),
   ];
-  if (cwd) lines.push(`Workspace: ${cwd}`);
-  if (model) lines.push(`Model: ${model}`);
-  if (duration !== null) lines.push(`Duration: ${duration}s`);
+  if (cwd) lines.push(htmlLine("Workspace", cwd, { code: true }));
+  if (model) lines.push(htmlLine("Model", model, { code: true }));
+  if (duration !== null) lines.push(htmlLine("Duration", `${duration}s`));
 
   if (collected.latestUserText) {
-    lines.push("", "Request:", shortText(collected.latestUserText, 420));
+    lines.push("", "<b>Request</b>", htmlEscape(shortText(collected.latestUserText, 420)));
   }
 
   if (summaryLines.length > 0) {
-    lines.push("", "What happened:");
-    for (const line of summaryLines) lines.push(shortText(line, 650));
+    lines.push("", "<b>What happened</b>");
+    for (const line of summaryLines) lines.push(htmlEscape(shortText(line, 650)));
   }
 
   if (changedFiles.length > 0) {
-    lines.push("", "Files touched:");
-    for (const file of changedFiles) lines.push(`- ${file}`);
+    lines.push("", "<b>Files touched</b>");
+    for (const file of changedFiles) lines.push(`- <code>${htmlEscape(file)}</code>`);
     if (collected.changedFiles.size > changedFiles.length) {
       lines.push(`- ...and ${collected.changedFiles.size - changedFiles.length} more`);
     }
   }
 
   if (tools.length > 0) {
-    lines.push("", `Tools: ${tools.join(", ")}`);
+    lines.push("", htmlLine("Tools", tools.join(", ")));
   }
 
-  return truncateForTelegram(lines.join("\n"));
+  return truncateForTelegram(compactLines(lines).join("\n"));
 }
 
 function truncateForTelegram(text) {
@@ -359,7 +420,7 @@ async function main() {
   }
 
   const body = formatNotification(input, collected);
-  const result = await sendTelegramMessage(body);
+  const result = await sendTelegramMessage(body, process.env, { parseMode: "HTML" });
   markSent(sessionId, textHash, result.messageId);
   logAudit({ event: "sent", sessionId, messageId: result.messageId, rich: true });
   console.error(`[telegram-completion-notifier] sent rich Telegram summary message_id=${result.messageId}`);

@@ -8,6 +8,7 @@ This local Codex plugin sends a Telegram notification when a Codex turn finishes
 
 The summary includes:
 
+- source identity (`From`) and agent identity (`Codex`) for shared notification chats
 - session title or derived request name
 - session ID, workspace, model, and duration when available
 - the latest user request
@@ -74,6 +75,7 @@ printf '{"session_id":"test","session_name":"Manual hook smoke","transcript_path
 ## Notes
 
 - The Stop hook de-dupes repeated sends per session and final message hash.
+- Telegram messages use HTML formatting for bold labels and code-styled IDs, paths, and model names.
 - Token-shaped strings in request and response text are redacted before sending.
 - Runtime audit logs live under `/tmp/telegram-completion-notifier/audit.log` and contain only status, timestamps, session IDs, and Telegram message IDs.
 
