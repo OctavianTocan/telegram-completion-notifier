@@ -1,0 +1,29 @@
+{
+  "name": "telegram-completion-notifier",
+  "version": "0.1.0",
+  "description": "Send Codex completion notifications to Telegram using Bitwarden Secrets Manager.",
+  "author": {
+    "name": "Octavian Tocan"
+  },
+  "homepage": "https://github.com/OctavianTocan/telegram-completion-notifier",
+  "repository": "https://github.com/OctavianTocan/telegram-completion-notifier",
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "telegram",
+    "bitwarden",
+    "notifications"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Telegram Completion Notifier",
+    "shortDescription": "Send final Codex responses to Telegram.",
+    "longDescription": "A local Codex plugin that runs a Stop hook, reads the final assistant response, fetches Telegram credentials from Bitwarden Secrets Manager, and sends a Telegram completion notification.",
+    "developerName": "Octavian Tocan",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive"
+    ],
+    "defaultPrompt": "Send me a Telegram notification."
+  }
+}
