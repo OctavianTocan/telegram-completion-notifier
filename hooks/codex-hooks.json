@@ -2,11 +2,10 @@
   "hooks": {
     "Stop": [
       {
-        "matcher": "*",
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/notify-claude-final.mjs\"",
+            "command": "node \"${PLUGIN_ROOT}/scripts/notify-final.mjs\"",
             "timeout": 45
           }
         ]

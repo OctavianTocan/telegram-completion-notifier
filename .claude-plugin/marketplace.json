@@ -1,0 +1,26 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "telegram-completion-notifier",
+  "owner": {
+    "name": "OctavianTocan"
+  },
+  "metadata": {
+    "description": "Telegram completion notifications for Claude Code and Codex, backed by Bitwarden Secrets Manager.",
+    "version": "0.2.0"
+  },
+  "plugins": [
+    {
+      "name": "telegram-completion-notifier",
+      "source": ".",
+      "description": "Send rich Claude Code & Codex completion summaries to Telegram (Stop hook), backed by Bitwarden Secrets Manager.",
+      "version": "0.2.0",
+      "author": {
+        "name": "Octavian Tocan"
+      },
+      "repository": "https://github.com/OctavianTocan/telegram-completion-notifier",
+      "license": "MIT",
+      "keywords": ["claude-code", "codex", "telegram", "bitwarden", "notifications"],
+      "category": "developer-tools"
+    }
+  ]
+}

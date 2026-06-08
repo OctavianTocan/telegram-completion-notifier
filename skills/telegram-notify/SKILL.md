@@ -1,6 +1,6 @@
 ---
 name: telegram-notify
-description: Send or verify Telegram notifications from Codex using Bitwarden Secrets Manager. Use when the user asks to notify, message, ping, send a Telegram update, verify completion notifications, or inspect the automatic completion-summary hook.
+description: Send or verify Telegram notifications from Codex or Claude Code using Bitwarden Secrets Manager. Use when the user asks to notify, message, ping, send a Telegram update, verify completion notifications, or inspect the automatic completion-summary hook.
 stages: [verify, ship]
 ---
 
@@ -8,7 +8,7 @@ stages: [verify, ship]
 
 Send Telegram notifications through the local `telegram-completion-notifier` plugin. Secrets are fetched from Bitwarden Secrets Manager at runtime; do not print or store Telegram token values locally.
 
-The installed Stop hook automatically sends a rich completion summary when a Codex turn finishes. It identifies the sender as Codex plus the local host, derives the session/task name from hook input, transcript metadata, the latest user request, or the workspace name, then includes session ID, workspace, model, duration, request, final-response summary, touched files, and tool counts when available. Telegram messages use HTML formatting for bold labels and code-styled IDs, paths, and model names. Each message includes a `Continue` inline callback button unless `TELEGRAM_COMPLETION_INLINE_KEYBOARD=0`. Each completion sends a summary followed by a separate last-AI-message copy labeled `🤖 Codex last AI message` or `🟣 Claude Code last AI message`.
+The installed Stop hook automatically sends a rich completion summary when a Codex or Claude Code turn finishes. It identifies the sender as Codex plus the local host, derives the session/task name from hook input, transcript metadata, the latest user request, or the workspace name, then includes session ID, workspace, model, duration, request, final-response summary, touched files, and tool counts when available. Telegram messages use HTML formatting for bold labels and code-styled IDs, paths, and model names. Each message includes a `Continue` inline callback button unless `TELEGRAM_COMPLETION_INLINE_KEYBOARD=0`. Each completion sends a summary followed by a separate last-AI-message copy labeled `🤖 Codex last AI message` or `🟣 Claude Code last AI message`.
 
 ## When to Use
 

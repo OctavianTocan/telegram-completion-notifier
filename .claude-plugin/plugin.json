@@ -1,0 +1,19 @@
+{
+  "name": "telegram-completion-notifier",
+  "version": "0.2.0",
+  "description": "Send rich Claude Code & Codex completion summaries to Telegram using Bitwarden Secrets Manager.",
+  "author": {
+    "name": "Octavian Tocan"
+  },
+  "homepage": "https://github.com/OctavianTocan/telegram-completion-notifier",
+  "repository": "https://github.com/OctavianTocan/telegram-completion-notifier",
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "codex",
+    "telegram",
+    "bitwarden",
+    "notifications"
+  ],
+  "skills": "./skills/"
+}

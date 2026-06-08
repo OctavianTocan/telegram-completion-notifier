@@ -6,12 +6,21 @@ const DEFAULT_BOT_TOKEN_SECRET_ID = "aadcf695-6049-47ac-9d9b-b462006bab90";
 const DEFAULT_CHAT_ID_SECRET_ID = "3ebc58f1-644f-4b1c-af95-b462006be9fe";
 const INLINE_KEYBOARD_DISABLED_VALUES = new Set(["0", "false", "off", "no"]);
 
+function stripAnsi(text) {
+  // bws honors FORCE_COLOR/COLORTERM and can emit ANSI-highlighted JSON even
+  // with --output json on a pipe; strip SGR escapes so JSON.parse succeeds.
+  return String(text).replace(/\u001b\[[0-9;]*m/g, "");
+}
+
 function readSecretValue(secretId) {
   const raw = execFileSync("bws", ["secret", "get", secretId, "--output", "json"], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
+    // Force color off; FORCE_COLOR in the inherited env would otherwise make
+    // bws colorize its JSON output and break the parse.
+    env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0", CLICOLOR: "0", CLICOLOR_FORCE: "0" },
   });
-  const parsed = JSON.parse(raw);
+  const parsed = JSON.parse(stripAnsi(raw));
   const value = Array.isArray(parsed) ? parsed[0]?.value : parsed.value;
   if (typeof value !== "string" || value.length === 0) {
     throw new Error(`Bitwarden secret ${secretId} did not contain a value`);

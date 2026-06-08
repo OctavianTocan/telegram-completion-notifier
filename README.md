@@ -1,6 +1,6 @@
 # Telegram Completion Notifier
 
-> Codex Stop-hook notifications to Telegram, backed by Bitwarden Secrets Manager.
+> Codex **and Claude Code** Stop-hook notifications to Telegram, backed by Bitwarden Secrets Manager.
 
 ## What It Does
 
@@ -27,13 +27,16 @@ The Codex Stop hook is intentionally awaited rather than async: Codex currently 
 
 ```text
 telegram-completion-notifier/
-├── .codex-plugin/plugin.json
+├── .claude-plugin/plugin.json        # Claude Code plugin manifest
+├── .claude-plugin/marketplace.json   # local marketplace entry
+├── .codex-plugin/plugin.json         # Codex plugin manifest
 ├── claude/settings.example.json
-├── hooks/hooks.json
-├── scripts/notify-claude-final.mjs
-├── scripts/notify-final.mjs
+├── hooks/hooks.json                  # Claude Code Stop hook
+├── hooks/codex-hooks.json            # Codex Stop hook
+├── scripts/notify-claude-final.mjs   # Claude Code adapter (transcript-derived)
+├── scripts/notify-final.mjs          # Codex adapter
 ├── scripts/poll-telegram-actions.mjs
-├── scripts/send-telegram.mjs
+├── scripts/send-telegram.mjs         # shared Telegram transport
 └── skills/telegram-notify/SKILL.md
 ```
 
@@ -118,40 +121,29 @@ The poller prints the actual `actions_log` path after each run.
 - Token-shaped strings in request and response text are redacted before sending.
 - Runtime audit logs live under `<os-temp-dir>/telegram-completion-notifier/audit.log` and contain only status, timestamps, session IDs, and Telegram message IDs.
 
-## Claude Code Compatibility
+## Claude Code support
 
-Claude Code has command hooks that also receive JSON on stdin. A Claude Code
-Stop hook can reuse `scripts/send-telegram.mjs` and the same Bitwarden-backed
-Telegram credentials, but it needs a Claude-specific transcript adapter because
-Claude Code hook input and transcript files differ from Codex rollout JSONL.
+This is a **dual-harness plugin**: the same repo serves both Codex and Claude Code, sharing `scripts/send-telegram.mjs` and the same Bitwarden-backed Telegram credentials.
 
-The intended adapter shape is:
+The Claude Code adapter (`scripts/notify-claude-final.mjs`) derives everything from the session **transcript** (`transcript_path`) — the latest request, the final assistant response, files touched, tool-call counts, model, and duration. It does **not** depend on `last_assistant_message` (Claude Code's Stop hook does not reliably provide it); it guards re-entrancy with `stop_hook_active` and the pre-flush read race with a short retry. A `TELEGRAM_DRY_RUN=1` env var prints the composed messages instead of sending.
 
-```text
-Claude Code Stop hook JSON -> Claude summary formatter -> send-telegram.mjs
-```
+Stop-hook input fields it relies on: `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `stop_hook_active`.
 
-Claude Code's Stop hook provides fields such as `session_id`, `transcript_path`,
-`cwd`, `hook_event_name`, `stop_hook_active`, and `last_assistant_message`.
-That is enough to build the same rich Telegram message without parsing Codex's
-rollout event format.
+### Hooks layout (dual harness)
 
-This repo includes that adapter:
+| Harness | Manifest | Hooks file |
+| --- | --- | --- |
+| Claude Code | `.claude-plugin/plugin.json` (no `hooks` field) | `hooks/hooks.json` (auto-discovered) → `notify-claude-final.mjs` via `${CLAUDE_PLUGIN_ROOT}` |
+| Codex | `.codex-plugin/plugin.json` (`"hooks": "./hooks/codex-hooks.json"`) | `hooks/codex-hooks.json` → `notify-final.mjs` via `${PLUGIN_ROOT}` |
+
+### Install for Claude Code
 
 ```bash
-node /root/plugins/telegram-completion-notifier/scripts/notify-claude-final.mjs
+claude plugin marketplace add /path/to/telegram-completion-notifier
+claude plugin install telegram-completion-notifier@telegram-completion-notifier --scope user
 ```
 
-Example Claude Code settings are in:
-
-```text
-claude/settings.example.json
-```
-
-Use that as the shape for a project or user-level `.claude/settings.json` Stop
-hook. It sends `Claude Code completion summary` messages through the same
-Bitwarden-backed Telegram transport and the same inline keyboard behavior,
-followed by a separate `🟣 Claude Code last AI message` copy.
+`bws` must be on `PATH` and `BWS_ACCESS_TOKEN` exported in the environment Claude Code runs in. The hook then fires on every turn end (new sessions), sending a `Claude Code completion summary` plus a separate `🟣 Claude Code last AI message`. A manual user-level `.claude/settings.json` Stop hook is also possible (see `claude/settings.example.json`), but the plugin install above is preferred — portable, no hardcoded paths.
 
 ## Repository
 
